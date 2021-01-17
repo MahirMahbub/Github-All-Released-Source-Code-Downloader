@@ -1,7 +1,7 @@
 import os
 import threading
 from threading import Thread
-from typing import Optional, List
+from typing import Optional, List, Union
 
 import requests
 from github import Github
@@ -92,7 +92,7 @@ class GithubReleaseDownloader(object):
 
 
     @staticmethod
-    def _get_release_zipball_urls(releases: PaginatedList[GitRelease]):
+    def _get_release_zipball_urls(releases: PaginatedList):
         download_links: List[str] = []
         for release in releases:
             download_links.append(release.zipball_url)
