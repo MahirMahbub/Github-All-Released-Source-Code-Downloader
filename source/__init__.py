@@ -1,7 +1,7 @@
 import os
 import threading
 from threading import Thread
-from typing import Optional, List, Union
+from typing import Optional, List
 
 import requests
 from github import Github
@@ -36,14 +36,17 @@ class GithubReleaseDownloader(object):
         return download_thread
 
 
-    def download_releases(self, repository: str,
-                          save_path: Optional[str] = os.getcwd(), thread_number: Optional[int] = 5):
+    def download_tags(self, repository: str,
+                      save_path: Optional[str] = os.getcwd(), thread_number: Optional[int] = 5):
         if thread_number > 128:
             assert "Number of Thread is too high"
         _cred: Github = self._authenticate_to_github(self._access_token, self._password, self._user_name)
         _repo: Repository = _cred.get_repo(repository)
         _repo_name: str = self._get_repository_name(repository)
-        _releases: PaginatedList[GitRelease] = _repo.get_releases()
+        _releases = _repo.get_tags()
+        for i in _releases:
+            print(i.zipball_url)
+
         _download_links: List[str] = self._get_release_zipball_urls(_releases)
         _number_of_release: int = len(_download_links)
         for start_index in range(0, _number_of_release, thread_number):
@@ -58,7 +61,37 @@ class GithubReleaseDownloader(object):
                 _thread_list.append(
                     self._create_new_download_thread(url=ref,
                                                      save_path=save_path + "\\" + _repo_name + "\\" + _version_name +
-                                                               ".tar.gz",
+                                                               ".zip",
+                                                     chunk_size=320 // _number_of_release))
+            for thread in _thread_list:
+                thread.join()
+
+
+    def download_releases(self, repository: str,
+                          save_path: Optional[str] = os.getcwd(), thread_number: Optional[int] = 5):
+        if thread_number > 128:
+            assert "Number of Thread is too high"
+        _cred: Github = self._authenticate_to_github(self._access_token, self._password, self._user_name)
+        _repo: Repository = _cred.get_repo(repository)
+        _repo_name: str = self._get_repository_name(repository)
+        _releases: PaginatedList[GitRelease] = _repo.get_releases()
+        for i in _releases:
+            print(i.zipball_url)
+        _download_links: List[str] = self._get_release_zipball_urls(_releases)
+        _number_of_release: int = len(_download_links)
+        for start_index in range(0, _number_of_release, thread_number):
+            _last_index: int
+            _thread_list: List[Thread]
+            _last_index, _thread_list = self._calculate_last_index_for_threading(_number_of_release, start_index,
+                                                                                 thread_number)
+            for ref in _download_links[start_index:_last_index]:
+                print("Downloading.....: ", ref)
+                _version_name: str = self._get_release_version(ref)
+                self._check_and_create_local_repo_dir(_repo_name, save_path)
+                _thread_list.append(
+                    self._create_new_download_thread(url=ref,
+                                                     save_path=save_path + "\\" + _repo_name + "\\" + _version_name +
+                                                               ".zip",
                                                      chunk_size=320 // _number_of_release))
             for thread in _thread_list:
                 thread.join()
